@@ -1,0 +1,91 @@
+# docker-compose.yml
+version: "3.9"
+
+services:
+
+  # ── 1. Flask API ─────────────────────────────────────────────
+  # Builds from flask-api/Dockerfile
+  # Mounts the code folder so changes reflect without rebuild
+  flask-api:
+    build:
+      context: ./flask-api
+      dockerfile: Dockerfile
+    container_name: cr-api
+    env_file: .env                         # loads all variables from .env
+    ports:
+      - "5001:5000"                        # Mac port 5001 → container port 5000
+                                           # (AirPlay uses 5000 on Mac, so we use 5001)
+    volumes:
+      - ./flask-api:/app                   # live code reload
+    depends_on:
+      mysql:
+        condition: service_healthy         # wait for MySQL to be actually ready
+      redis:
+        condition: service_healthy
+    networks:
+      - cr-net
+    restart: unless-stopped
+
+  # ── 2. MySQL 8 ───────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: cr-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - mysql-data:/var/lib/mysql          # data survives container restarts
+    ports:
+      - "3307:3306"                        # 3307 externally (avoids conflict with local MySQL)
+    networks:
+      - cr-net
+    restart: unless-stopped
+    healthcheck:                           # Flask waits for this to pass before starting
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "${DB_USER}", "-p${DB_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ── 3. Redis ─────────────────────────────────────────────────
+  redis:
+    image: redis:7.2-alpine
+    container_name: cr-redis
+    volumes:
+      - redis-data:/data
+    networks:
+      - cr-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── 4. ChromaDB ──────────────────────────────────────────────
+  # Vector database — stores embeddings of past reviews
+  # We use it on Day 1 to save review text, Day 2 to query similar ones
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: cr-chromadb
+    volumes:
+      - chroma-data:/chroma/chroma
+    ports:
+      - "8000:8000"
+    networks:
+      - cr-net
+    restart: unless-stopped
+
+# Named volumes — data lives here even when containers stop
+volumes:
+  mysql-data:
+  redis-data:
+  chroma-data:
+
+# One shared network — containers talk to each other by container name
+# e.g. flask-api connects to MySQL at host "mysql", port 3306
+networks:
+  cr-net:
+    driver: bridge

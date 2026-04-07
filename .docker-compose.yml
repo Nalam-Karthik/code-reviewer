@@ -1,0 +1,82 @@
+version: '3.9'
+
+services:
+
+  flask-api:
+    build:
+      context: ./flask-api                    
+      dockerfile: flask-api/Dockerfile
+    container_name: cr-api          
+    env_file: .env                  
+    ports:
+      - "5001:5000"
+    volumes:
+      - ./flask-api:/app
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - cr-net
+    restart: unless-stopped
+
+
+  mysql:
+    image: mysql:8.0
+    container_name: cr-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    ports:
+      - "3307:3306"
+    networks:
+      - cr-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "${DB_USER}", "-p${DB_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+    
+  redis:
+    image: redis:7.2-alpine
+    container_name: cr-redis
+    volumes:
+      - redis-data:/data
+    networks:
+      - cr-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: cr-chromadb
+    volumes:
+      - chroma-data:/chroma/chroma
+    ports:
+      - "8000:8000"
+    networks:
+      - cr-net
+    restart: unless-stopped
+
+  
+volumes:
+  mysql-data:
+  redis-data:
+  chroma-data:
+
+networks:
+  cr-net:
+    driver: bridge
