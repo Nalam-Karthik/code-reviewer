@@ -1,5 +1,3 @@
-# docker-compose.yml
-version: "3.9"
 
 services:
 
@@ -11,9 +9,12 @@ services:
       context: ./flask-api
       dockerfile: Dockerfile
     container_name: cr-api
-    env_file: .env                         # loads all variables from .env
+    env_file: .env                   #this line loads all the variables from the env file 
+    environment:                           
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092                         
     ports:
-      - "5001:5000"                        # Mac port 5001 → container port 5000
+      - "5001:5000"
+      - "50051:50051"                        # Mac port 5001 → container port 5000
                                            # (AirPlay uses 5000 on Mac, so we use 5001)
     volumes:
       - ./flask-api:/app                   # live code reload
@@ -74,6 +75,57 @@ services:
       - chroma-data:/chroma/chroma
     ports:
       - "8000:8000"
+    networks:
+      - cr-net
+    restart: unless-stopped
+
+
+  # ── Zookeeper (Kafka needs this to manage cluster state) ──
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: cr-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - cr-net
+    restart: unless-stopped
+
+  # ── Kafka broker ──────────────────────────────────────────
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: cr-kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      # PLAINTEXT_HOST is how your Mac connects (localhost:9092)
+      # PLAINTEXT is how other containers connect (kafka:29092)
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports:
+      - "9092:9092"
+    networks:
+      - cr-net
+    restart: unless-stopped
+
+  # ── Audit consumer (separate Python service) ──────────────
+  audit-consumer:
+    build:
+      context: ./audit-consumer
+      dockerfile: Dockerfile
+    container_name: cr-audit-consumer
+    env_file: .env
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - DB_HOST=mysql
+    depends_on:
+      mysql:
+        condition: service_healthy
     networks:
       - cr-net
     restart: unless-stopped

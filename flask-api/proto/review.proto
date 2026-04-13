@@ -1,0 +1,41 @@
+// flask-api/proto/review.proto
+//
+// This file defines the gRPC service contract.
+// Think of it like an API schema — both client and server
+// agree on this shape. No ambiguity, no JSON guessing.
+//
+// Compile with:
+// python -m grpc_tools.protoc -I./proto --python_out=./proto --grpc_python_out=./proto ./proto/review.proto
+
+syntax = "proto3";
+
+package review;
+
+// The service definition — what RPCs are available
+service CodeReviewService {
+  // Takes multiple files, returns multiple reviews (server-side streaming)
+  rpc BatchReview (BatchReviewRequest) returns (stream ReviewResponse);
+}
+
+// One file to review
+message CodeFile {
+  string language = 1;
+  string code     = 2;
+  string filename = 3;   // e.g. "utils.py"
+}
+
+// Request = list of files
+message BatchReviewRequest {
+  repeated CodeFile files = 1;
+  string user_id          = 2;
+}
+
+// One review result — streamed back one at a time
+message ReviewResponse {
+  string filename  = 1;
+  string language  = 2;
+  string summary   = 3;
+  int32  score     = 4;
+  bool   success   = 5;
+  string error     = 6;
+}
