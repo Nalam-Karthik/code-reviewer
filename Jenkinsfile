@@ -9,7 +9,6 @@ pipeline {
 
     stages {
 
-        // ── Stage 1: Checkout ──────────────────────────────
         stage('Checkout') {
             steps {
                 checkout scm
@@ -17,16 +16,15 @@ pipeline {
             }
         }
 
-        // ── Stage 2: Lint ──────────────────────────────────
         stage('Lint') {
             steps {
                 dir('flask-api') {
                     sh '''
-                        pip3 install flake8 --quiet --break-system-packages
-                        
-                        # Fix PATH so Jenkins can find flake8
+                        python3 -m pip install --upgrade pip --break-system-packages
+                        python3 -m pip install flake8 --break-system-packages
+
                         export PATH=$HOME/.local/bin:$PATH
-                        
+
                         flake8 app/ \
                             --max-line-length=120 \
                             --ignore=E501,W503,E221,E241,E251,E231,E262,E272,E302,E303,E401,W291,W292,W293,W391,F841 \
@@ -36,17 +34,20 @@ pipeline {
             }
         }
 
-        // ── Stage 3: Test ──────────────────────────────────
         stage('Test') {
             steps {
                 dir('flask-api') {
                     sh '''
-                        pip3 install -r requirements.txt --quiet --break-system-packages
-                        pip3 install pytest --quiet --break-system-packages
-                        
-                        # Ensure pytest is found
+                        # 🔥 CRITICAL FIX
+                        python3 -m pip install --upgrade pip setuptools wheel --break-system-packages
+
+                        # Install dependencies AFTER fixing setuptools
+                        python3 -m pip install -r requirements.txt --break-system-packages
+
+                        python3 -m pip install pytest --break-system-packages
+
                         export PATH=$HOME/.local/bin:$PATH
-                        
+
                         pytest tests/ -v --tb=short
                     '''
                 }
@@ -58,27 +59,28 @@ pipeline {
             }
         }
 
-        // ── Stage 4: Build Docker Image ────────────────────
         stage('Build') {
             steps {
                 dir('flask-api') {
                     sh '''
+                        # Fix docker permission properly
+                        sudo chmod 666 /var/run/docker.sock || true
+
                         docker build \
                             -t ${IMAGE_NAME}:${IMAGE_TAG} \
                             -t ${IMAGE_NAME}:latest \
                             .
-                        echo "Built image: ${IMAGE_NAME}:${IMAGE_TAG}"
                     '''
                 }
             }
         }
 
-        // ── Stage 5: Deploy ────────────────────────────────
         stage('Deploy') {
             steps {
                 sh '''
+                    sudo chmod 666 /var/run/docker.sock || true
+
                     docker compose up -d --no-deps --build flask-api
-                    echo "Deployed ${IMAGE_NAME}:${IMAGE_TAG}"
                 '''
             }
         }
