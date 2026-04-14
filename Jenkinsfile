@@ -36,22 +36,9 @@ pipeline {
             steps {
                 dir('flask-api') {
                     sh '''
-                        apt-get update -qq
-                        apt-get install -y pkg-config default-libmysqlclient-dev
-
                         python3 -m pip install --upgrade pip setuptools wheel --break-system-packages
-
-                        # grpcio 1.62.2 is incompatible with Python 3.13
-                        # Pin to a version that supports Python 3.13
-                        python3 -m pip install --break-system-packages \
-                            "grpcio>=1.68.0" \
-                            "grpcio-tools>=1.68.0"
-
-                        # Install everything else (grpcio line in requirements.txt will be overridden)
-                        python3 -m pip install -r requirements.txt \
-                            --break-system-packages \
-                            --ignore-installed grpcio
-
+                        python3 -m pip install "grpcio>=1.68.0" --break-system-packages
+                        python3 -m pip install -r requirements.txt --break-system-packages --ignore-installed grpcio
                         export PATH=/var/jenkins_home/.local/bin:$PATH
                         pytest tests/ -v --tb=short
                     '''
