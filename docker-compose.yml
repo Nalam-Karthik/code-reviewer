@@ -130,11 +130,27 @@ services:
       - cr-net
     restart: unless-stopped
 
+  jenkins:
+    build:
+      context: ./jenkins
+      dockerfile: Dockerfile
+    container_name: cr-jenkins
+    ports:
+      - "8080:8080"       # Jenkins web UI
+      - "50000:50000"     # Jenkins agent communication port
+    volumes:
+      - jenkins-data:/var/jenkins_home          # Jenkins state persists
+      - /var/run/docker.sock:/var/run/docker.sock  # Docker socket mount
+    networks:
+      - cr-net
+    restart: unless-stopped
+
 # Named volumes — data lives here even when containers stop
 volumes:
   mysql-data:
   redis-data:
   chroma-data:
+  jenkins-data:
 
 # One shared network — containers talk to each other by container name
 # e.g. flask-api connects to MySQL at host "mysql", port 3306
