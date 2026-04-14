@@ -49,6 +49,7 @@ pipeline {
             steps {
                 dir('flask-api') {
                     sh '''
+                        apt-get install -y pkg-config default-libmysqlclient-dev --quiet 2>/dev/null || true
                         pip3 install -r requirements.txt --quiet --break-system-packages
                         pytest tests/ -v --tb=short
                     '''
