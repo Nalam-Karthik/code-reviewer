@@ -23,6 +23,10 @@ pipeline {
                 dir('flask-api') {
                     sh '''
                         pip3 install flake8 --quiet --break-system-packages
+                        
+                        # Fix PATH so Jenkins can find flake8
+                        export PATH=$HOME/.local/bin:$PATH
+                        
                         flake8 app/ \
                             --max-line-length=120 \
                             --ignore=E501,W503,E221,E241,E251,E231,E262,E272,E302,E303,E401,W291,W292,W293,W391,F841 \
@@ -37,11 +41,12 @@ pipeline {
             steps {
                 dir('flask-api') {
                     sh '''
-                        # Install dependencies (NO apt-get here)
                         pip3 install -r requirements.txt --quiet --break-system-packages
                         pip3 install pytest --quiet --break-system-packages
-
-                        # Run tests
+                        
+                        # Ensure pytest is found
+                        export PATH=$HOME/.local/bin:$PATH
+                        
                         pytest tests/ -v --tb=short
                     '''
                 }
