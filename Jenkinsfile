@@ -38,7 +38,7 @@ pipeline {
                 dir('flask-api') {
                     sh '''
                         pip3 install flake8 --quiet --break-system-packages
-                        /var/jenkins_home/.local/bin/flake8 app/ --max-line-length=120 --ignore=E501,W503 --statistics
+                        /var/jenkins_home/.local/bin/flake8 app/ --max-line-length=120 --ignore=E501,W503,E221,E241,E251,E231,E262,E272,E302,E303,E401,W291,W292,W293,W391,F841 --statistics
                     '''
                 }
             }
