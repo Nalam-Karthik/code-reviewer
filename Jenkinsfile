@@ -27,8 +27,6 @@ pipeline {
         // ── Stage 1: Checkout ──────────────────────────────
         stage('Checkout') {
             steps {
-                // Jenkins clones your GitHub repo here automatically
-                // No explicit step needed — checkout scm handles it
                 checkout scm
                 echo "Checked out branch: ${env.BRANCH_NAME}"
             }
@@ -39,9 +37,7 @@ pipeline {
             steps {
                 dir('flask-api') {
                     sh '''
-                        pip3 install flake8 --quiet
-                        # E501 = line too long (we skip it, not critical)
-                        # W503 = line break before binary operator (style preference)
+                        pip3 install flake8 --quiet --break-system-packages
                         flake8 app/ --max-line-length=120 --ignore=E501,W503 --statistics
                     '''
                 }
@@ -53,16 +49,13 @@ pipeline {
             steps {
                 dir('flask-api') {
                     sh '''
-                        pip3 install -r requirements.txt --quiet
-                        # Run pytest — if any test fails, this stage fails
-                        # and Deploy never runs
+                        pip3 install -r requirements.txt --quiet --break-system-packages
                         pytest tests/ -v --tb=short
                     '''
                 }
             }
             post {
                 always {
-                    // Archive test results so you can see them in Jenkins UI
                     junit allowEmptyResults: true, testResults: 'flask-api/test-results/*.xml'
                 }
             }
@@ -85,14 +78,11 @@ pipeline {
 
         // ── Stage 5: Deploy ────────────────────────────────
         stage('Deploy') {
-            // Only deploy from main branch — not feature branches
             when {
                 branch 'main'
             }
             steps {
                 sh '''
-                    # Restart only flask-api with the new image
-                    # --no-deps means don't restart MySQL/Redis etc.
                     docker compose up -d --no-deps --build flask-api
                     echo "Deployed ${IMAGE_NAME}:${IMAGE_TAG}"
                 '''
@@ -109,7 +99,6 @@ pipeline {
             echo "Pipeline FAILED at stage. Check logs above."
         }
         always {
-            // Clean up dangling Docker images after every build
             sh 'docker image prune -f || true'
         }
     }
