@@ -1,3 +1,4 @@
+// Jenkinsfile
 pipeline {
 
     agent any
@@ -22,11 +23,8 @@ pipeline {
                     sh '''
                         python3 -m pip install --upgrade pip --break-system-packages
                         python3 -m pip install flake8 --break-system-packages
-
-                        export PATH=$HOME/.local/bin:$PATH
-
-                        flake8 app/ \
-                            --max-line-length=120 \
+                        export PATH=/var/jenkins_home/.local/bin:$PATH
+                        flake8 app/ --max-line-length=120 \
                             --ignore=E501,W503,E221,E241,E251,E231,E262,E272,E302,E303,E401,W291,W292,W293,W391,F841 \
                             --statistics
                     '''
@@ -38,16 +36,23 @@ pipeline {
             steps {
                 dir('flask-api') {
                     sh '''
-                        # 🔥 CRITICAL FIX
+                        apt-get update -qq
+                        apt-get install -y pkg-config default-libmysqlclient-dev
+
                         python3 -m pip install --upgrade pip setuptools wheel --break-system-packages
 
-                        # Install dependencies AFTER fixing setuptools
-                        python3 -m pip install -r requirements.txt --break-system-packages
+                        # grpcio 1.62.2 is incompatible with Python 3.13
+                        # Pin to a version that supports Python 3.13
+                        python3 -m pip install --break-system-packages \
+                            "grpcio>=1.68.0" \
+                            "grpcio-tools>=1.68.0"
 
-                        python3 -m pip install pytest --break-system-packages
+                        # Install everything else (grpcio line in requirements.txt will be overridden)
+                        python3 -m pip install -r requirements.txt \
+                            --break-system-packages \
+                            --ignore-installed grpcio
 
-                        export PATH=$HOME/.local/bin:$PATH
-
+                        export PATH=/var/jenkins_home/.local/bin:$PATH
                         pytest tests/ -v --tb=short
                     '''
                 }
@@ -63,13 +68,11 @@ pipeline {
             steps {
                 dir('flask-api') {
                     sh '''
-                        # Fix docker permission properly
-                        sudo chmod 666 /var/run/docker.sock || true
-
                         docker build \
                             -t ${IMAGE_NAME}:${IMAGE_TAG} \
                             -t ${IMAGE_NAME}:latest \
                             .
+                        echo "Built image: ${IMAGE_NAME}:${IMAGE_TAG}"
                     '''
                 }
             }
@@ -78,9 +81,8 @@ pipeline {
         stage('Deploy') {
             steps {
                 sh '''
-                    sudo chmod 666 /var/run/docker.sock || true
-
                     docker compose up -d --no-deps --build flask-api
+                    echo "Deployed ${IMAGE_NAME}:${IMAGE_TAG}"
                 '''
             }
         }
