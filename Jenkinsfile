@@ -1,22 +1,7 @@
-// Jenkinsfile
-// Place this at the project root — Jenkins finds it automatically.
-//
-// Pipeline stages:
-//   1. Checkout  — clone the repo
-//   2. Lint      — check code style with flake8
-//   3. Test      — run pytest suite
-//   4. Build     — build Docker image
-//   5. Deploy    — restart flask-api container with new image
-//
-// If ANY stage fails, all subsequent stages are skipped.
-// This means bad code never gets deployed.
-
 pipeline {
 
-    // Run on any available Jenkins agent
     agent any
 
-    // Environment variables available to all stages
     environment {
         IMAGE_NAME = "code-reviewer-api"
         IMAGE_TAG  = "${BUILD_NUMBER}"
@@ -38,7 +23,7 @@ pipeline {
                 dir('flask-api') {
                     sh '''
                         pip3 install flake8 --quiet --break-system-packages
-                        /var/jenkins_home/.local/bin/flake8 app/ \
+                        flake8 app/ \
                             --max-line-length=120 \
                             --ignore=E501,W503,E221,E241,E251,E231,E262,E272,E302,E303,E401,W291,W292,W293,W391,F841 \
                             --statistics
@@ -52,11 +37,12 @@ pipeline {
             steps {
                 dir('flask-api') {
                     sh '''
-                        apt-get update -qq
-                        apt-get install -y pkg-config default-libmysqlclient-dev
+                        # Install dependencies (NO apt-get here)
                         pip3 install -r requirements.txt --quiet --break-system-packages
                         pip3 install pytest --quiet --break-system-packages
-                        /var/jenkins_home/.local/bin/pytest tests/ -v --tb=short
+
+                        # Run tests
+                        pytest tests/ -v --tb=short
                     '''
                 }
             }
@@ -83,8 +69,6 @@ pipeline {
         }
 
         // ── Stage 5: Deploy ────────────────────────────────
-        // branch() check removed — BRANCH_NAME is null in this setup.
-        // Deploy runs on every successful build from main.
         stage('Deploy') {
             steps {
                 sh '''
@@ -95,7 +79,6 @@ pipeline {
         }
     }
 
-    // ── Post-pipeline notifications ────────────────────────
     post {
         success {
             echo "Pipeline passed. ${IMAGE_NAME}:${IMAGE_TAG} is live."
