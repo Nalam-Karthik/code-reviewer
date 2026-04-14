@@ -19,7 +19,7 @@ pipeline {
     // Environment variables available to all stages
     environment {
         IMAGE_NAME = "code-reviewer-api"
-        IMAGE_TAG  = "${BUILD_NUMBER}"   // Jenkins build number as tag e.g. "42"
+        IMAGE_TAG  = "${BUILD_NUMBER}"
     }
 
     stages {
@@ -28,7 +28,7 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
-                echo "Checked out branch: ${env.BRANCH_NAME}"
+                echo "Checked out commit: ${env.GIT_COMMIT}"
             }
         }
 
@@ -38,7 +38,10 @@ pipeline {
                 dir('flask-api') {
                     sh '''
                         pip3 install flake8 --quiet --break-system-packages
-                        /var/jenkins_home/.local/bin/flake8 app/ --max-line-length=120 --ignore=E501,W503,E221,E241,E251,E231,E262,E272,E302,E303,E401,W291,W292,W293,W391,F841 --statistics
+                        /var/jenkins_home/.local/bin/flake8 app/ \
+                            --max-line-length=120 \
+                            --ignore=E501,W503,E221,E241,E251,E231,E262,E272,E302,E303,E401,W291,W292,W293,W391,F841 \
+                            --statistics
                     '''
                 }
             }
@@ -49,9 +52,11 @@ pipeline {
             steps {
                 dir('flask-api') {
                     sh '''
-                        apt-get install -y pkg-config default-libmysqlclient-dev --quiet 2>/dev/null || true
+                        apt-get update -qq
+                        apt-get install -y pkg-config default-libmysqlclient-dev
                         pip3 install -r requirements.txt --quiet --break-system-packages
-                        pytest tests/ -v --tb=short
+                        pip3 install pytest --quiet --break-system-packages
+                        /var/jenkins_home/.local/bin/pytest tests/ -v --tb=short
                     '''
                 }
             }
@@ -78,10 +83,9 @@ pipeline {
         }
 
         // ── Stage 5: Deploy ────────────────────────────────
+        // branch() check removed — BRANCH_NAME is null in this setup.
+        // Deploy runs on every successful build from main.
         stage('Deploy') {
-            when {
-                branch 'main'
-            }
             steps {
                 sh '''
                     docker compose up -d --no-deps --build flask-api
